@@ -12,6 +12,8 @@ import (
 
 	"github.com/google/go-tpm-tools/internal"
 	pb "github.com/google/go-tpm-tools/proto/tpm"
+	"github.com/google/go-tpm/direct/structures/tpmt"
+	tpm2direct "github.com/google/go-tpm/direct/tpm2"
 	"github.com/google/go-tpm/tpm2"
 	"github.com/google/go-tpm/tpmutil"
 )
@@ -25,6 +27,9 @@ type Key struct {
 	rw      io.ReadWriter
 	handle  tpmutil.Handle
 	pubArea tpm2.Public
+	// >>> Start Direct Implementaion <<<
+	pubAreaDirect tpmt.Public
+	// >>> End Direct Implementaion <<<
 	pubKey  crypto.PublicKey
 	name    tpm2.Name
 	session session
@@ -196,6 +201,11 @@ func NewKey(rw io.ReadWriter, parent tpmutil.Handle, template tpm2.Public) (k *K
 	if k.pubArea, err = tpm2.DecodePublic(pubArea); err != nil {
 		return
 	}
+
+	var tpmtPublic tpmt.Public
+	tpm2direct.Unmarshal(pubArea, tpmtPublic)
+	k.pubAreaDirect = tpmtPublic
+
 	return k, k.finish()
 }
 
@@ -238,6 +248,12 @@ func (k *Key) Name() tpm2.Name {
 // determining additional properties of the underlying TPM key.
 func (k *Key) PublicArea() tpm2.Public {
 	return k.pubArea
+}
+
+// PublicAreaDirect exposes the key's entire direct public area. This is useful for
+// determining additional properties of the underlying TPM key.
+func (k *Key) PublicAreaDirect() tpmt.Public {
+	return k.pubAreaDirect
 }
 
 // PublicKey provides a go interface to the loaded key's public area.

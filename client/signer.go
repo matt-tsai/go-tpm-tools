@@ -10,6 +10,8 @@ import (
 	"sync"
 
 	"github.com/google/go-tpm-tools/internal"
+	"github.com/google/go-tpm/direct/structures/tpm2b"
+	tpm2Direct "github.com/google/go-tpm/direct/tpm2"
 	"github.com/google/go-tpm/tpm2"
 )
 
@@ -19,11 +21,6 @@ var signerMutex sync.Mutex
 type tpmSigner struct {
 	Key  *Key
 	Hash crypto.Hash
-}
-
-// Public returns the tpmSigners public key.
-func (signer *tpmSigner) Public() crypto.PublicKey {
-	return signer.Key.PublicKey()
 }
 
 // Sign uses the TPM key to sign the digest.
@@ -57,6 +54,19 @@ func (signer *tpmSigner) Sign(_ io.Reader, digest []byte, opts crypto.SignerOpts
 	signerMutex.Lock()
 	defer signerMutex.Unlock()
 
+	// TODO
+	// Find out where in the world the key handle is from
+	sign := tpm2Direct.Sign{
+		KeyHandle: tpm2Direct.AuthHandle{
+			Handle: internal.TPMHandle(handle), // this is going wrong
+			Name:   signer.Key.name,
+			Auth:   signer.Key.session,
+		},
+		Digest: tpm2b.Digest{
+			Buffer: digest,
+		},
+	}
+
 	auth, err := signer.Key.session.Auth()
 	if err != nil {
 		return nil, err
@@ -68,6 +78,29 @@ func (signer *tpmSigner) Sign(_ io.Reader, digest []byte, opts crypto.SignerOpts
 	}
 	return getSignature(sig)
 }
+
+/*
+
+// Sample Idea
+
+	sign := tpm2.Sign {
+		KeyHandle: tpm2.AuthHandle{ // I think these are going in the right direction but unsure how to truly migrate
+			Handle: signer.Key.handle,
+			Name: signer.Key.name,
+			Auth: signer.Key.session,
+		},
+		Digest: tpm2b.Digest {
+			Buffer: digest,
+		},
+		InScheme: tpmt.SigScheme {
+			Scheme: signer.Key.pubArea.Type,
+			Details: tpmu.SigScheme{
+
+			},
+		},
+
+	}
+*/
 
 // GetSigner returns a crypto.Signer wrapping the loaded TPM Key.
 // Concurrent use of one or more Signers is thread safe, but it is not safe to
