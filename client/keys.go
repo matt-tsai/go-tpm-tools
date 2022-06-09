@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/go-tpm-tools/internal"
 	pb "github.com/google/go-tpm-tools/proto/tpm"
+	"github.com/google/go-tpm/direct/structures/tpm2b"
 	"github.com/google/go-tpm/direct/structures/tpmt"
 	tpm2direct "github.com/google/go-tpm/direct/tpm2"
 	"github.com/google/go-tpm/tpm2"
@@ -29,6 +30,8 @@ type Key struct {
 	pubArea tpm2.Public
 	// >>> Start Direct Implementaion <<<
 	pubAreaDirect tpmt.Public
+	nameDirect    *tpm2b.Name
+	sessionDirect tpm2direct.Session
 	// >>> End Direct Implementaion <<<
 	pubKey  crypto.PublicKey
 	name    tpm2.Name
@@ -217,14 +220,19 @@ func (k *Key) finish() error {
 	if k.name, err = k.pubArea.Name(); err != nil {
 		return err
 	}
+	if k.nameDirect, err = tpm2direct.ObjectName(&k.pubAreaDirect); err != nil {
+		return err
+	}
 	// We determine the right type of session based on the auth policy
 	if k.session == nil {
 		if bytes.Equal(k.pubArea.AuthPolicy, defaultEKAuthPolicy()) {
 			if k.session, err = newEKSession(k.rw); err != nil {
 				return err
 			}
+			return fmt.Errorf("TODO")
 		} else if len(k.pubArea.AuthPolicy) == 0 {
 			k.session = nullSession{}
+			k.sessionDirect = tpm2direct.PasswordAuth(nil)
 		} else {
 			return fmt.Errorf("unknown auth policy when creating key")
 		}

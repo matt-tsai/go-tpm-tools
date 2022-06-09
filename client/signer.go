@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/google/go-tpm-tools/internal"
+	"github.com/google/go-tpm/direct/structures/tpm"
 	"github.com/google/go-tpm/direct/structures/tpm2b"
 	tpm2Direct "github.com/google/go-tpm/direct/tpm2"
 	"github.com/google/go-tpm/tpm2"
@@ -21,6 +22,11 @@ var signerMutex sync.Mutex
 type tpmSigner struct {
 	Key  *Key
 	Hash crypto.Hash
+}
+
+// Public returns the tpmSigners public key.
+func (signer *tpmSigner) Public() crypto.PublicKey {
+	return signer.Key.PublicKey()
 }
 
 // Sign uses the TPM key to sign the digest.
@@ -54,53 +60,34 @@ func (signer *tpmSigner) Sign(_ io.Reader, digest []byte, opts crypto.SignerOpts
 	signerMutex.Lock()
 	defer signerMutex.Unlock()
 
-	// TODO
-	// Find out where in the world the key handle is from
 	sign := tpm2Direct.Sign{
 		KeyHandle: tpm2Direct.AuthHandle{
-			Handle: internal.TPMHandle(handle), // this is going wrong
-			Name:   signer.Key.name,
-			Auth:   signer.Key.session,
+			Handle: tpm.Handle(signer.Key.handle.HandleValue()),
+			Name:   *signer.Key.nameDirect,
+			Auth:   signer.Key.sessionDirect,
 		},
 		Digest: tpm2b.Digest{
 			Buffer: digest,
 		},
+		// unsure that the inscheme can be nullable and it will apply the null scheme
+		// I think it is ok
+
 	}
 
-	auth, err := signer.Key.session.Auth()
+	rspSign, err := sign.Execute(nil) // unsure what to put here as well as it isnt a simlulator tpm
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Failed to Sign Digest")
 	}
 
-	sig, err := tpm2.SignWithSession(signer.Key.rw, auth.Session, signer.Key.handle, "", digest, nil, nil)
-	if err != nil {
-		return nil, err
-	}
-	return getSignature(sig)
+	// sig, err := tpm2.SignWithSession(signer.Key.rw, auth.Session, signer.Key.handle, "", digest, nil, nil)
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	// return the correct sig based on the tag of the response struct
+	// perhaps write a helper function to do this. See getSignature below
+	return getSignatureDirect(rspSign)
 }
-
-/*
-
-// Sample Idea
-
-	sign := tpm2.Sign {
-		KeyHandle: tpm2.AuthHandle{ // I think these are going in the right direction but unsure how to truly migrate
-			Handle: signer.Key.handle,
-			Name: signer.Key.name,
-			Auth: signer.Key.session,
-		},
-		Digest: tpm2b.Digest {
-			Buffer: digest,
-		},
-		InScheme: tpmt.SigScheme {
-			Scheme: signer.Key.pubArea.Type,
-			Details: tpmu.SigScheme{
-
-			},
-		},
-
-	}
-*/
 
 // GetSigner returns a crypto.Signer wrapping the loaded TPM Key.
 // Concurrent use of one or more Signers is thread safe, but it is not safe to
@@ -175,5 +162,20 @@ func getSignature(sig *tpm2.Signature) ([]byte, error) {
 		return asn1.Marshal(sigStruct)
 	default:
 		return nil, fmt.Errorf("unsupported signing algorithm: %v", sig.Alg)
+	}
+}
+
+func getSignatureDirect(rspSign *tpm2Direct.SignResponse) ([]byte, error) {
+	switch tpm2.Algorithm(rspSign.Signature.SigAlg) {
+	case tpm2.AlgRSASSA:
+		return rspSign.Signature.Signature.RSASSA.Sig.Buffer, nil
+	case tpm2.AlgRSAPSS:
+		return rspSign.Signature.Signature.RSAPSS.Sig.Buffer, nil
+	case tpm2.AlgHMAC:
+		return rspSign.Signature.Signature.HMAC.Digest, nil
+	case tpm2.AlgECDSA:
+		return nil, fmt.Errorf("not sure what to return for ECDSA")
+	default:
+		return nil, fmt.Errorf("unsupported signing algorithm %v", rspSign.Signature.SigAlg)
 	}
 }
