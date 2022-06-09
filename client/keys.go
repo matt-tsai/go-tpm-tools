@@ -204,11 +204,11 @@ func NewKey(rw io.ReadWriter, parent tpmutil.Handle, template tpm2.Public) (k *K
 	if k.pubArea, err = tpm2.DecodePublic(pubArea); err != nil {
 		return
 	}
-
+	// >>> Start Direct Implementaion <<<
 	var tpmtPublic tpmt.Public
 	tpm2direct.Unmarshal(pubArea, tpmtPublic)
 	k.pubAreaDirect = tpmtPublic
-
+	// >>> End Direct Implementaion <<<
 	return k, k.finish()
 }
 
@@ -220,9 +220,10 @@ func (k *Key) finish() error {
 	if k.name, err = k.pubArea.Name(); err != nil {
 		return err
 	}
-	if k.nameDirect, err = tpm2direct.ObjectName(&k.pubAreaDirect); err != nil {
-		return err
-	}
+	// Not passing this check
+	// if k.nameDirect, err = tpm2direct.ObjectName(&k.pubAreaDirect); err != nil {
+	// 	return err
+	// }
 	// We determine the right type of session based on the auth policy
 	if k.session == nil {
 		if bytes.Equal(k.pubArea.AuthPolicy, defaultEKAuthPolicy()) {

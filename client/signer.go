@@ -75,6 +75,9 @@ func (signer *tpmSigner) Sign(_ io.Reader, digest []byte, opts crypto.SignerOpts
 	}
 
 	rspSign, err := sign.Execute(nil) // unsure what to put here as well as it isnt a simlulator tpm
+	// HERE NEEDS TO BE FIXED ^^^^^^
+
+	
 	if err != nil {
 		return nil, fmt.Errorf("Failed to Sign Digest")
 	}

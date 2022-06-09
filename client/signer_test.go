@@ -102,23 +102,20 @@ func TestSign(t *testing.T) {
 
 			key, err := client.NewKey(rwc, tpm2.HandleEndorsement, k.template)
 			if err != nil {
+				// FAILS HERE IN NEW KEY
 				t.Fatal(err)
 			}
-			print("001")
 			defer key.Close()
-			print("1")
 
 			signer, err := key.GetSigner()
 			if err != nil {
 				t.Fatal(err)
 			}
-			print("2")
 
 			sig, err := signer.Sign(nil, digest, k.hash)
 			if err != nil {
 				t.Fatal(err)
 			}
-			print("3")
 
 			if !k.verify(signer.Public(), k.hash, digest, sig) {
 				t.Error(err)
