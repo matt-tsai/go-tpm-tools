@@ -12,7 +12,9 @@ import (
 	"github.com/google/go-tpm-tools/internal"
 	"github.com/google/go-tpm/direct/structures/tpm"
 	"github.com/google/go-tpm/direct/structures/tpm2b"
+	"github.com/google/go-tpm/direct/structures/tpmt"
 	tpm2Direct "github.com/google/go-tpm/direct/tpm2"
+	"github.com/google/go-tpm/direct/transport"
 	"github.com/google/go-tpm/tpm2"
 )
 
@@ -71,15 +73,15 @@ func (signer *tpmSigner) Sign(_ io.Reader, digest []byte, opts crypto.SignerOpts
 		},
 		// unsure that the inscheme can be nullable and it will apply the null scheme
 		// I think it is ok
-
+		Validation: tpmt.TKHashCheck{
+			Tag: tpm.STHashCheck,
+		},
 	}
 
-	rspSign, err := sign.Execute(nil) // unsure what to put here as well as it isnt a simlulator tpm
-	// HERE NEEDS TO BE FIXED ^^^^^^
+	rspSign, err := sign.Execute(signer.Key.transportTPM)
 
-	
 	if err != nil {
-		return nil, fmt.Errorf("Failed to Sign Digest")
+		return nil, fmt.Errorf("Failed to Sign Digest: %v", err)
 	}
 
 	// sig, err := tpm2.SignWithSession(signer.Key.rw, auth.Session, signer.Key.handle, "", digest, nil, nil)
@@ -169,15 +171,18 @@ func getSignature(sig *tpm2.Signature) ([]byte, error) {
 }
 
 func getSignatureDirect(rspSign *tpm2Direct.SignResponse) ([]byte, error) {
-	switch tpm2.Algorithm(rspSign.Signature.SigAlg) {
-	case tpm2.AlgRSASSA:
+	switch rspSign.Signature.SigAlg {
+	case tpm.AlgRSASSA:
 		return rspSign.Signature.Signature.RSASSA.Sig.Buffer, nil
-	case tpm2.AlgRSAPSS:
+	case tpm.AlgRSAPSS:
 		return rspSign.Signature.Signature.RSAPSS.Sig.Buffer, nil
-	case tpm2.AlgHMAC:
+	case tpm.AlgHMAC:
 		return rspSign.Signature.Signature.HMAC.Digest, nil
-	case tpm2.AlgECDSA:
-		return nil, fmt.Errorf("not sure what to return for ECDSA")
+	case tpm.AlgECDSA:
+		r := rspSign.Signature.Signature.ECDSA.SignatureR.Buffer
+		s := rspSign.Signature.Signature.ECDSA.SignatureS.Buffer
+		sigStruct := struct{ R, S *big.Int }{big.NewInt(0).SetBytes(r), big.NewInt(0).SetBytes(s)}
+		return asn1.Marshal(sigStruct)
 	default:
 		return nil, fmt.Errorf("unsupported signing algorithm %v", rspSign.Signature.SigAlg)
 	}

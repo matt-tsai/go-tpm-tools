@@ -15,6 +15,7 @@ import (
 	"github.com/google/go-tpm/direct/structures/tpm2b"
 	"github.com/google/go-tpm/direct/structures/tpmt"
 	tpm2direct "github.com/google/go-tpm/direct/tpm2"
+	"github.com/google/go-tpm/direct/transport"
 	"github.com/google/go-tpm/tpm2"
 	"github.com/google/go-tpm/tpmutil"
 )
@@ -29,6 +30,7 @@ type Key struct {
 	handle  tpmutil.Handle
 	pubArea tpm2.Public
 	// >>> Start Direct Implementaion <<<
+	transportTPM  transport.TPM
 	pubAreaDirect tpmt.Public
 	nameDirect    *tpm2b.Name
 	sessionDirect tpm2direct.Session
@@ -206,8 +208,11 @@ func NewKey(rw io.ReadWriter, parent tpmutil.Handle, template tpm2.Public) (k *K
 	}
 	// >>> Start Direct Implementaion <<<
 	var tpmtPublic tpmt.Public
-	tpm2direct.Unmarshal(pubArea, tpmtPublic)
+	if err := tpm2direct.Unmarshal(pubArea, &tpmtPublic); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal: %v", err)
+	}
 	k.pubAreaDirect = tpmtPublic
+	k.transportTPM = transport.WrapReadWrite(rw)
 	// >>> End Direct Implementaion <<<
 	return k, k.finish()
 }
@@ -221,9 +226,9 @@ func (k *Key) finish() error {
 		return err
 	}
 	// Not passing this check
-	// if k.nameDirect, err = tpm2direct.ObjectName(&k.pubAreaDirect); err != nil {
-	// 	return err
-	// }
+	if k.nameDirect, err = tpm2direct.ObjectName(&k.pubAreaDirect); err != nil {
+		return err
+	}
 	// We determine the right type of session based on the auth policy
 	if k.session == nil {
 		if bytes.Equal(k.pubArea.AuthPolicy, defaultEKAuthPolicy()) {
