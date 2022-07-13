@@ -102,7 +102,6 @@ func TestSign(t *testing.T) {
 
 			key, err := client.NewKey(rwc, tpm2.HandleEndorsement, k.template)
 			if err != nil {
-				// FAILS HERE IN NEW KEY
 				t.Fatal(err)
 			}
 			defer key.Close()

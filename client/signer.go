@@ -14,7 +14,6 @@ import (
 	"github.com/google/go-tpm/direct/structures/tpm2b"
 	"github.com/google/go-tpm/direct/structures/tpmt"
 	tpm2Direct "github.com/google/go-tpm/direct/tpm2"
-	"github.com/google/go-tpm/direct/transport"
 	"github.com/google/go-tpm/tpm2"
 )
 
@@ -71,8 +70,6 @@ func (signer *tpmSigner) Sign(_ io.Reader, digest []byte, opts crypto.SignerOpts
 		Digest: tpm2b.Digest{
 			Buffer: digest,
 		},
-		// unsure that the inscheme can be nullable and it will apply the null scheme
-		// I think it is ok
 		Validation: tpmt.TKHashCheck{
 			Tag: tpm.STHashCheck,
 		},
@@ -84,13 +81,6 @@ func (signer *tpmSigner) Sign(_ io.Reader, digest []byte, opts crypto.SignerOpts
 		return nil, fmt.Errorf("Failed to Sign Digest: %v", err)
 	}
 
-	// sig, err := tpm2.SignWithSession(signer.Key.rw, auth.Session, signer.Key.handle, "", digest, nil, nil)
-	// if err != nil {
-	// 	return nil, err
-	// }
-
-	// return the correct sig based on the tag of the response struct
-	// perhaps write a helper function to do this. See getSignature below
 	return getSignatureDirect(rspSign)
 }
 
@@ -120,6 +110,10 @@ func (k *Key) GetSigner() (crypto.Signer, error) {
 // on a restriced key, the TPM itself will hash the provided data, failing the
 // signing operation if the data begins with TPM_GENERATED_VALUE.
 func (k *Key) SignData(data []byte) ([]byte, error) {
+
+	// // ensure the hash alg is supported
+	// hashAlgID := k.pubAreaDirect.NameAlg
+
 	hashAlg, err := internal.GetSigningHashAlg(k.pubArea)
 	if err != nil {
 		return nil, err
@@ -130,12 +124,19 @@ func (k *Key) SignData(data []byte) ([]byte, error) {
 	if k.hasAttribute(tpm2.FlagRestricted) {
 		// Restricted keys can only sign data hashed by the TPM. We use the
 		// owner hierarchy for the Ticket, but any non-Null hierarchy would do.
+
+		// the tpm hashes the data 
 		digest, ticket, err = tpm2.Hash(k.rw, hashAlg, data, tpm2.HandleOwner)
+
+
+		// >> Start Direct Hash Implementation
 		if err != nil {
 			return nil, err
 		}
 	} else {
 		// Unrestricted keys can sign any digest, no need for TPM hashing.
+
+		// the tpm does not need to hash the data and it is faster/more optimized
 		hash, err := hashAlg.Hash()
 		if err != nil {
 			return nil, err
@@ -145,10 +146,19 @@ func (k *Key) SignData(data []byte) ([]byte, error) {
 		digest = hasher.Sum(nil)
 	}
 
+	
 	auth, err := k.session.Auth()
 	if err != nil {
 		return nil, err
 	}
+
+
+	// >> delete this part?
+	// make an auth handle 
+	// create sign struct with an auth handle
+	// go tom tools key to tpm direct auth handle 
+	// make it a method on key 
+	// tpm2Direct.AuthHandle
 	sig, err := tpm2.SignWithSession(k.rw, auth.Session, k.handle, "", digest, ticket, nil)
 	if err != nil {
 		return nil, err

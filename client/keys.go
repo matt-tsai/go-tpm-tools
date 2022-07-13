@@ -212,7 +212,7 @@ func NewKey(rw io.ReadWriter, parent tpmutil.Handle, template tpm2.Public) (k *K
 		return nil, fmt.Errorf("failed to unmarshal: %v", err)
 	}
 	k.pubAreaDirect = tpmtPublic
-	k.transportTPM = transport.WrapReadWrite(rw)
+	k.transportTPM = transport.FromReadWriter(rw)
 	// >>> End Direct Implementaion <<<
 	return k, k.finish()
 }
