@@ -125,9 +125,8 @@ func (k *Key) SignData(data []byte) ([]byte, error) {
 		// Restricted keys can only sign data hashed by the TPM. We use the
 		// owner hierarchy for the Ticket, but any non-Null hierarchy would do.
 
-		// the tpm hashes the data 
+		// the tpm hashes the data
 		digest, ticket, err = tpm2.Hash(k.rw, hashAlg, data, tpm2.HandleOwner)
-
 
 		// >> Start Direct Hash Implementation
 		if err != nil {
@@ -146,18 +145,16 @@ func (k *Key) SignData(data []byte) ([]byte, error) {
 		digest = hasher.Sum(nil)
 	}
 
-	
 	auth, err := k.session.Auth()
 	if err != nil {
 		return nil, err
 	}
 
-
 	// >> delete this part?
-	// make an auth handle 
+	// make an auth handle
 	// create sign struct with an auth handle
-	// go tom tools key to tpm direct auth handle 
-	// make it a method on key 
+	// go tpm tools key to tpm direct auth handle
+	// make it a method on key
 	// tpm2Direct.AuthHandle
 	sig, err := tpm2.SignWithSession(k.rw, auth.Session, k.handle, "", digest, ticket, nil)
 	if err != nil {
